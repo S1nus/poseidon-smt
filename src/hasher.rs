@@ -1,4 +1,6 @@
 //! A module for implementing hash functions supporting `monotree`.
+use std::convert::TryInto;
+
 use crate::utils::*;
 use crate::*;
 use digest::Digest;
@@ -11,6 +13,24 @@ pub trait Hasher {
     fn digest(&self, bytes: &[u8]) -> Hash;
 }
 
+fn bytes_into_frs(bytes: &[u8]) -> Vec<Fr> {
+    let chunk_size = 31;
+    bytes
+        .chunks(chunk_size.try_into().expect("Couldn't convert int"))
+        .map(|c| {
+            let mut buf = [0; 32];
+            buf[..c.len()].copy_from_slice(c);
+            let mut fr = FrRepr::from(0);
+            fr.read_le(&buf[..])
+                .expect("Could not read the chunk");
+            let f = Fr::from_repr(fr)
+                .expect("Could not convert the input bytes to a field element");
+            println!("Feild: {:?}", f);
+            f
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug)]
 pub struct Poseidon;
 impl Hasher for Poseidon {
@@ -19,18 +39,15 @@ impl Hasher for Poseidon {
     }
 
     fn digest(&self, bytes: &[u8]) -> Hash {
-        let mut fr = FrRepr::from(0);
-        fr.read_le(&bytes[..])
-            .expect("Could not read input bytes as a field element");
-        let f = Fr::from_repr(fr)
-            .expect("Could not convert the input bytes to a field element");
+        let frs = bytes_into_frs(bytes);
         let p = PoseidonHash::new();
-        let hash = p.hash(vec![f])
+        let hash = p.hash(frs)
             .expect("Could not hash this value with poseidon.");
         let hash_repr = hash.into_repr();
         let mut hash_bytes: [u8; 32] = [0; 32];
         hash_repr.write_le(&mut hash_bytes[..])
             .expect("Could not write the hash result to 32 bytes le buffer");
+        println!("HASH: {:?}", hash_bytes);
         hash_bytes
     }
 }

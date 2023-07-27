@@ -2,11 +2,37 @@
 use crate::utils::*;
 use crate::*;
 use digest::Digest;
+use ff::{PrimeFieldRepr, PrimeField};
+use poseidon_rs::{Poseidon as PoseidonHash, Fr, FrRepr};
 
 /// A trait defining hashers used for `monotree`
 pub trait Hasher {
     fn new() -> Self;
     fn digest(&self, bytes: &[u8]) -> Hash;
+}
+
+#[derive(Clone, Debug)]
+pub struct Poseidon;
+impl Hasher for Poseidon {
+    fn new() -> Self {
+        Poseidon
+    }
+
+    fn digest(&self, bytes: &[u8]) -> Hash {
+        let mut fr = FrRepr::from(0);
+        fr.read_le(&bytes[..])
+            .expect("Could not read input bytes as a field element");
+        let f = Fr::from_repr(fr)
+            .expect("Could not convert the input bytes to a field element");
+        let p = PoseidonHash::new();
+        let hash = p.hash(vec![f])
+            .expect("Could not hash this value with poseidon.");
+        let hash_repr = hash.into_repr();
+        let mut hash_bytes: [u8; 32] = [0; 32];
+        hash_repr.write_le(&mut hash_bytes[..])
+            .expect("Could not write the hash result to 32 bytes le buffer");
+        hash_bytes
+    }
 }
 
 #[derive(Clone, Debug)]
